@@ -1,6 +1,7 @@
 # Binaries
 metadata-api
 /convert
+/server
 
 # SQLite databases
 *.sqlite3
