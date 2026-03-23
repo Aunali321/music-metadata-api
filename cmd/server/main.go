@@ -7,19 +7,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"metadata-api/internal/api"
+	"metadata-api/internal/convert"
 	"metadata-api/internal/db"
 )
 
 func main() {
 	var (
-		addr    = flag.String("addr", ":8080", "listen address")
-		dbPath  = flag.String("db", "", "path to main_database.sqlite3 (sqlite backend)")
-		backend = flag.String("backend", "sqlite", "database backend: sqlite or parquet")
-		dataDir = flag.String("data", "", "directory containing parquet files (parquet backend)")
+		addr      = flag.String("addr", ":8080", "listen address")
+		dbPath    = flag.String("db", "", "path to main_database.sqlite3 (sqlite backend)")
+		backend   = flag.String("backend", "sqlite", "database backend: sqlite, parquet, or auto")
+		dataDir   = flag.String("data", "", "directory containing parquet files (parquet/auto backend)")
+		batchSize = flag.Int("batch-size", 100000, "rows per batch during auto-conversion")
 	)
 	flag.Parse()
 
@@ -29,16 +32,29 @@ func main() {
 	switch *backend {
 	case "sqlite":
 		if *dbPath == "" {
-			slog.Error("db path required for sqlite backend")
+			slog.Error("-db path required for sqlite backend")
 			os.Exit(1)
 		}
 		database, err = db.Open(*dbPath)
+
 	case "parquet":
 		if *dataDir == "" {
-			slog.Error("data directory required for parquet backend")
+			slog.Error("-data directory required for parquet backend")
 			os.Exit(1)
 		}
 		database, err = db.OpenParquet(*dataDir)
+
+	case "auto":
+		if *dbPath == "" {
+			slog.Error("-db path required for auto backend")
+			os.Exit(1)
+		}
+		if *dataDir == "" {
+			// Default parquet dir alongside the SQLite file
+			*dataDir = filepath.Join(filepath.Dir(*dbPath), "parquet")
+		}
+		database, err = openAuto(*dbPath, *dataDir, *batchSize)
+
 	default:
 		slog.Error("unknown backend", "backend", *backend)
 		os.Exit(1)
@@ -78,4 +94,21 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)
+}
+
+// openAuto checks for existing parquet files; if missing, converts from SQLite first.
+func openAuto(dbPath, dataDir string, batchSize int) (db.Database, error) {
+	if convert.ParquetFilesExist(dataDir) {
+		slog.Info("parquet files found, using parquet backend", "dir", dataDir)
+		return db.OpenParquet(dataDir)
+	}
+
+	slog.Info("parquet files not found, converting from SQLite", "db", dbPath, "out", dataDir)
+	cfg := convert.Config{BatchSize: batchSize}
+	if err := convert.Run(dbPath, dataDir, cfg); err != nil {
+		return nil, err
+	}
+
+	slog.Info("conversion complete, opening parquet backend")
+	return db.OpenParquet(dataDir)
 }

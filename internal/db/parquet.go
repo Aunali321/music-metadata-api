@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
 // OpenParquet opens a DuckDB in-memory database and creates views over parquet
