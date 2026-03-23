@@ -1,5 +1,3 @@
-//go:build duckdb
-
 package db
 
 import (

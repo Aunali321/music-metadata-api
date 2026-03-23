@@ -31,11 +31,11 @@ services:
       retries: 3
       start_period: 10s
 
-  # Parquet backend (requires duckdb build tag)
+  # Parquet backend
   # metadata-api-parquet:
   #   build:
   #     context: .
-  #     target: server-parquet
+  #     target: server
   #   container_name: metadata-api-parquet
   #   restart: unless-stopped
   #   ports:
