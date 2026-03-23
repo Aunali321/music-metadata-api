@@ -1,8 +1,12 @@
-# Binary
+# Binaries
 metadata-api
+/convert
 
 # SQLite databases
 *.sqlite3
+
+# Parquet files
+*.parquet
 
 # IDE
 .idea/

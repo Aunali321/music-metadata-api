@@ -1,7 +1,10 @@
 services:
+  # SQLite backend (default)
   metadata-api:
     image: ghcr.io/aunali321/music-metadata-api:latest
-    # build: .  # Uncomment to build locally instead
+    # build:
+    #   context: .
+    #   target: server
     container_name: metadata-api
     restart: unless-stopped
     ports:
@@ -27,3 +30,33 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Parquet backend (requires duckdb build tag)
+  # metadata-api-parquet:
+  #   build:
+  #     context: .
+  #     target: server-parquet
+  #   container_name: metadata-api-parquet
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - /path/to/your/parquet/files:/data:ro
+  #   command: -backend parquet -data /data -addr :8080
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
+
+  # SQLite-to-Parquet converter (one-shot)
+  # convert:
+  #   build:
+  #     context: .
+  #     target: converter
+  #   container_name: metadata-converter
+  #   volumes:
+  #     - /path/to/your/databases:/input:ro
+  #     - /path/to/output:/output
+  #   command: -db /input/main_database.sqlite3 -out /output

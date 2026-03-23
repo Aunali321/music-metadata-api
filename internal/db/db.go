@@ -17,6 +17,16 @@ import (
 type DB struct {
 	main       *sql.DB
 	trackFiles *sql.DB
+	backend    string // "sqlite" or "parquet"
+}
+
+// likeNoCase returns the SQL clause for case-insensitive LIKE matching.
+// SQLite uses "LIKE ? COLLATE NOCASE", DuckDB uses "ILIKE ?".
+func (d *DB) likeNoCase() string {
+	if d.backend == "parquet" {
+		return "ILIKE ?"
+	}
+	return "LIKE ? COLLATE NOCASE"
 }
 
 func Open(dbPath string) (*DB, error) {
@@ -38,7 +48,7 @@ func Open(dbPath string) (*DB, error) {
 	}
 	trackFiles.SetMaxOpenConns(8)
 
-	return &DB{main: main, trackFiles: trackFiles}, nil
+	return &DB{main: main, trackFiles: trackFiles, backend: "sqlite"}, nil
 }
 
 func (d *DB) Close() error {
@@ -262,12 +272,12 @@ func (d *DB) SearchArtist(ctx context.Context, query string, limit int) ([]model
 	}
 
 	// Use case-insensitive substring search with LIMIT for safety
-	rows, err := d.main.QueryContext(ctx, `
+	rows, err := d.main.QueryContext(ctx, fmt.Sprintf(`
 		SELECT id, name, followers_total, popularity, rowid FROM artists
-		WHERE name LIKE ? COLLATE NOCASE
+		WHERE name %s
 		ORDER BY followers_total DESC
 		LIMIT ?
-	`, "%"+query+"%", limit)
+	`, d.likeNoCase()), "%"+query+"%", limit)
 	if err != nil {
 		return nil, fmt.Errorf("search artist: %w", err)
 	}
@@ -293,17 +303,17 @@ func (d *DB) SearchTrack(ctx context.Context, query string, limit int) ([]models
 	}
 
 	// Use case-insensitive substring search with LIMIT for safety
-	rows, err := d.main.QueryContext(ctx, `
+	rows, err := d.main.QueryContext(ctx, fmt.Sprintf(`
 		SELECT t.id, t.name, t.external_id_isrc, t.duration_ms, t.explicit,
 		       t.track_number, t.disc_number, t.popularity, t.preview_url,
 		       a.id, a.name, a.album_type, a.label, a.release_date, a.release_date_precision,
 		       a.external_id_upc, a.total_tracks, a.copyright_c, a.copyright_p, a.rowid
 		FROM tracks t
 		JOIN albums a ON t.album_rowid = a.rowid
-		WHERE t.name LIKE ? COLLATE NOCASE
+		WHERE t.name %s
 		ORDER BY t.popularity DESC
 		LIMIT ?
-	`, "%"+query+"%", limit)
+	`, d.likeNoCase()), "%"+query+"%", limit)
 	if err != nil {
 		return nil, fmt.Errorf("search track: %w", err)
 	}

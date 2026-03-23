@@ -16,22 +16,41 @@ import (
 
 func main() {
 	var (
-		addr   = flag.String("addr", ":8080", "listen address")
-		dbPath = flag.String("db", "", "path to main_database.sqlite3")
+		addr    = flag.String("addr", ":8080", "listen address")
+		dbPath  = flag.String("db", "", "path to main_database.sqlite3 (sqlite backend)")
+		backend = flag.String("backend", "sqlite", "database backend: sqlite or parquet")
+		dataDir = flag.String("data", "", "directory containing parquet files (parquet backend)")
 	)
 	flag.Parse()
 
-	if *dbPath == "" {
-		slog.Error("db path required")
+	var database db.Database
+	var err error
+
+	switch *backend {
+	case "sqlite":
+		if *dbPath == "" {
+			slog.Error("db path required for sqlite backend")
+			os.Exit(1)
+		}
+		database, err = db.Open(*dbPath)
+	case "parquet":
+		if *dataDir == "" {
+			slog.Error("data directory required for parquet backend")
+			os.Exit(1)
+		}
+		database, err = db.OpenParquet(*dataDir)
+	default:
+		slog.Error("unknown backend", "backend", *backend)
 		os.Exit(1)
 	}
 
-	database, err := db.Open(*dbPath)
 	if err != nil {
-		slog.Error("open db", "err", err)
+		slog.Error("open database", "backend", *backend, "err", err)
 		os.Exit(1)
 	}
 	defer database.Close()
+
+	slog.Info("database opened", "backend", *backend)
 
 	handler := api.New(database)
 	rateLimiter := api.NewRateLimiter(100, 200)

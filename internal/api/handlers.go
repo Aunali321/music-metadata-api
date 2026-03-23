@@ -17,10 +17,10 @@ import (
 var openapiSpec embed.FS
 
 type Handler struct {
-	db *db.DB
+	db db.Database
 }
 
-func New(database *db.DB) *Handler {
+func New(database db.Database) *Handler {
 	return &Handler{db: database}
 }
 
